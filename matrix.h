@@ -24,7 +24,8 @@ class Matrix {
   public:
     Matrix() = default;
     Matrix(std::initializer_list<std::vector<int>> a);
-    Field Gauss();
+    Field gauss_and_det();
+    void inverse_gauss();
     Field det() const;
     size_t rank() const;
     Matrix<N, M, Field> inverted() const;
@@ -37,8 +38,8 @@ class Matrix {
     Matrix<M, N, Field> transposed() const;
     Matrix<N, M, Field>& operator+=(const Matrix<N, M, Field>& other);
     Matrix<N, M, Field>& operator-=(const Matrix<N, M, Field>& other);
-    Matrix<N, M, Field>& operator*=(Field a);
-    Matrix<N, M, Field>& operator*=(Matrix<N, M, Field>& other);
+    Matrix<N, M, Field>& operator*=(const Field& a);
+    Matrix<N, M, Field>& operator*=(const Matrix<N, M, Field>& other);
 };
 
 size_t mod(long long x, size_t N) {
@@ -50,10 +51,11 @@ template <size_t N, size_t M, typename Field>
 bool operator==(const Matrix<N, M, Field>& a, const Matrix<N, M, Field>& b);
 
 template <size_t N, typename Field>
-void minus(std::array<Field, N>& a, const std::array<Field, N>& b, Field k);
+void minus(std::array<Field, N>& a, const std::array<Field, N>& b,
+           const Field& k);
 
 template <size_t N, typename Field>
-void multiply(std::array<Field, N>& a, Field k);
+void multiply(std::array<Field, N>& a, const Field& k);
 
 template <size_t N>
 bool operator==(const Residue<N>& a, const Residue<N>& b);
@@ -95,7 +97,7 @@ Matrix<N, K, Field> operator*(const Matrix<N, M, Field>& a,
 }
 
 template <size_t N, size_t M, typename Field>
-Matrix<N, M, Field>& Matrix<N, M, Field>::operator*=(Field a) {
+Matrix<N, M, Field>& Matrix<N, M, Field>::operator*=(const Field& a) {
     for (size_t i = 0; i < N; ++i) {
         for (size_t j = 0; j < M; ++j) {
             v[i][j] *= a;
@@ -105,14 +107,14 @@ Matrix<N, M, Field>& Matrix<N, M, Field>::operator*=(Field a) {
 }
 
 template <size_t N, size_t M, typename Field>
-Matrix<N, M, Field> operator*(const Matrix<N, M, Field>& m, Field a) {
+Matrix<N, M, Field> operator*(const Matrix<N, M, Field>& m, const Field& a) {
     Matrix<N, M, Field> ans = m;
     ans *= a;
     return ans;
 }
 
 template <size_t N, size_t M, typename Field>
-Matrix<N, M, Field> operator*(Field a, const Matrix<N, M, Field>& m) {
+Matrix<N, M, Field> operator*(const Field& a, const Matrix<N, M, Field>& m) {
     Matrix<N, M, Field> ans = m;
     ans *= a;
     return ans;
@@ -150,25 +152,30 @@ const std::array<Field, M>& Matrix<N, M, Field>::operator[](size_t i) const {
 }
 
 template <size_t N, size_t M, typename Field>
-Matrix<N, M, Field>& Matrix<N, M, Field>::operator+=(
-    const Matrix<N, M, Field>& other) {
+Matrix<N, M, Field>& plus_or_minus(Matrix<N, M, Field>& a,
+                                   const Matrix<N, M, Field>& b, bool plus) {
     for (size_t i = 0; i < N; ++i) {
         for (size_t j = 0; j < M; ++j) {
-            v[i][j] += other[i][j];
+            if (plus) {
+                a[i][j] += b[i][j];
+            } else {
+                a[i][j] -= b[i][j];
+            }
         }
     }
-    return *this;
+    return a;
+}
+
+template <size_t N, size_t M, typename Field>
+Matrix<N, M, Field>& Matrix<N, M, Field>::operator+=(
+    const Matrix<N, M, Field>& other) {
+    return plus_or_minus(*this, other, true);
 }
 
 template <size_t N, size_t M, typename Field>
 Matrix<N, M, Field>& Matrix<N, M, Field>::operator-=(
     const Matrix<N, M, Field>& other) {
-    for (size_t i = 0; i < N; ++i) {
-        for (size_t j = 0; j < M; ++j) {
-            v[i][j] -= other[i][j];
-        }
-    }
-    return *this;
+    return plus_or_minus(*this, other, false);
 }
 
 template <size_t N, size_t M, typename Field>
@@ -186,7 +193,7 @@ std::array<Field, N> Matrix<N, M, Field>::getColumn(size_t i) const {
 }
 
 template <size_t N, size_t M, typename Field>
-Field Matrix<N, M, Field>::Gauss() {
+Field Matrix<N, M, Field>::gauss_and_det() {
     int inversions_count = 0;
     size_t j = 0;
     for (size_t i = 0; i < M; ++i) {
@@ -236,13 +243,13 @@ Matrix<N, M, Field>::Matrix(std::initializer_list<std::vector<int>> a) {
 template <size_t N, size_t M, typename Field>
 Field Matrix<N, M, Field>::det() const {
     Matrix<N, M, Field> tmp = *this;
-    return tmp.Gauss();
+    return tmp.gauss_and_det();
 }
 
 template <size_t N, size_t M, typename Field>
 size_t Matrix<N, M, Field>::rank() const {
     Matrix<N, M, Field> tmp = *this;
-    tmp.Gauss();
+    tmp.gauss_and_det();
     size_t ans = 0;
     for (size_t i = 0; i < N; ++i) {
         for (size_t j = 0; j < M; ++j) {
@@ -267,16 +274,8 @@ Matrix<N, M, Field> Matrix<N, M, Field>::inverted() const {
     for (size_t i = 0; i < N; ++i) {
         tmp[i][N + i] = Field(1);
     }
-    tmp.Gauss();
-    for (size_t i = 0; i < N; ++i) {
-        Field x = Field(1) / tmp[i][i];
-        multiply(tmp[i], x);
-    }
-    for (size_t i = 1; i < N; ++i) {
-        for (size_t j = 0; j < i; ++j) {
-            minus(tmp[j], tmp[i], tmp[j][i]);
-        }
-    }
+    tmp.gauss_and_det();
+    tmp.inverse_gauss();
     Matrix<N, N, Field> ans;
     for (size_t i = 0; i < N; ++i) {
         for (size_t j = 0; j < N; ++j) {
@@ -287,13 +286,27 @@ Matrix<N, M, Field> Matrix<N, M, Field>::inverted() const {
 }
 
 template <size_t N, size_t M, typename Field>
+void Matrix<N, M, Field>::inverse_gauss() {
+    for (size_t i = 0; i < N; ++i) {
+        Field x = Field(1) / v[i][i];
+        multiply(v[i], x);
+    }
+    for (size_t i = 1; i < N; ++i) {
+        for (size_t j = 0; j < i; ++j) {
+            Field k = v[j][i];
+            minus(v[j], v[i], k);
+        }
+    }
+}
+
+template <size_t N, size_t M, typename Field>
 void Matrix<N, M, Field>::invert() {
-    *this = this->inverted();
+    *this = inverted();
 }
 
 template <size_t N, size_t M, typename Field>
 Matrix<N, M, Field>& Matrix<N, M, Field>::operator*=(
-    Matrix<N, M, Field>& other) {
+    const Matrix<N, M, Field>& other) {
     *this = *this * other;
     return *this;
 }
@@ -436,14 +449,15 @@ std::ostream& operator<<(std::ostream& out, const Residue<N>& a) {
 }
 
 template <size_t N, typename Field>
-void minus(std::array<Field, N>& a, const std::array<Field, N>& b, Field k) {
+void minus(std::array<Field, N>& a, const std::array<Field, N>& b,
+           const Field& k) {
     for (size_t i = 0; i < N; ++i) {
         a[i] -= b[i] * k;
     }
 }
 
 template <size_t N, typename Field>
-void multiply(std::array<Field, N>& a, Field k) {
+void multiply(std::array<Field, N>& a, const Field& k) {
     for (size_t i = 0; i < N; ++i) {
         a[i] *= k;
     }

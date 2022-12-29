@@ -94,7 +94,7 @@ class Rational {
 std::ostream& operator>>(std::ostream& out, Rational& a);
 std::ostream& operator<<(std::ostream& out, const Rational& a);
 
-bool operator!=(Rational& a, Rational& b);
+bool operator!=(const Rational& a, const Rational& b);
 bool operator<(const Rational& a, const Rational& b);
 bool operator>(const Rational& a, const Rational& b);
 bool operator<=(const Rational& a, const Rational& b);
